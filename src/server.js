@@ -3,6 +3,7 @@
  *
  * Phase 1: Auth & User
  * Phase 2: Products
+ * Phase 3: Orders
  */
 
 const express = require('express');
@@ -11,94 +12,87 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
+require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 
-// 🔒 Load environment variables (FORCED PATH)
-require('dotenv').config({
-  path: path.resolve(__dirname, '../.env'),
-});
-
-// 🔌 Database
 const { connectDB } = require('./config/database');
 
-// 📦 Routes
+// Routes
 const authRoutes = require('./routes/auth.routes');
 const userRoutes = require('./routes/user.routes');
 const productRoutes = require('./routes/product.routes');
 const adminProductRoutes = require('./routes/admin/product.routes');
+const orderRoutes = require('./routes/order.routes');
+const adminOrderRoutes = require('./routes/admin/order.routes');
 
-// 🚀 App init
+// Init app
 const app = express();
 
-// =====================
-// Global Middlewares
-// =====================
+/* =========================
+   Middleware
+========================= */
+app.use(cors());
 app.use(helmet());
-app.use(cors({ origin: process.env.CORS_ORIGIN || '*' }));
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan('dev'));
 
-// =====================
-// Rate Limiting
-// =====================
-const apiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 300,
-  standardHeaders: true,
-  legacyHeaders: false,
-});
+app.use(
+  rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 300
+  })
+);
 
-app.use('/api', apiLimiter);
+/* =========================
+   Routes
+========================= */
 
-// =====================
-// API Routes
-// =====================
+// Health
 app.get('/', (req, res) => {
   res.json({
     success: true,
-    message: 'YouthQit Backend API is running 🚀',
+    message: 'YouthQit API running 🚀'
   });
 });
 
+// Auth & User
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/users', userRoutes);
+
+// Products
 app.use('/api/v1/products', productRoutes);
 app.use('/api/v1/admin/products', adminProductRoutes);
 
-// =====================
-// 404 Handler
-// =====================
-app.use((req, res) => {
-  res.status(404).json({
-    success: false,
-    message: 'API route not found',
-  });
-});
+// Orders
+app.use('/api/v1/orders', orderRoutes);
+app.use('/api/v1/admin/orders', adminOrderRoutes);
 
-// =====================
-// Global Error Handler
-// =====================
+/* =========================
+   Error Handler
+========================= */
 app.use((err, req, res, next) => {
-  console.error('❌ Error:', err.message);
-
-  res.status(err.statusCode || 500).json({
+  console.error('Unhandled Error:', err);
+  res.status(500).json({
     success: false,
-    message: err.message || 'Internal Server Error',
+    message: 'Internal server error'
   });
 });
 
-// =====================
-// Server Start
-// =====================
+/* =========================
+   Server Start
+========================= */
 const PORT = process.env.PORT || 5000;
 
 const startServer = async () => {
-  await connectDB();
-
-  app.listen(PORT, () => {
-    console.log(`🚀 Server running on port ${PORT}`);
-  });
+  try {
+    await connectDB();
+    app.listen(PORT, () => {
+      console.log(`🚀 Server running on port ${PORT}`);
+    });
+  } catch (error) {
+    console.error('❌ Server startup failed:', error);
+    process.exit(1);
+  }
 };
 
 startServer();
-

@@ -1,15 +1,20 @@
 /**
- * Controllers Index - MVP
+ * Admin Order Routes - MVP
  */
 
-const AuthController = require('./auth.controller');
-const UserController = require('./user.controller');
-const ProductController = require('./product.controller');
-const AdminProductController = require('./admin-product.controller');
+const express = require('express');
+const router = express.Router();
 
-module.exports = {
-  AuthController,
-  UserController,
-  ProductController,
-  AdminProductController
-};
+const { adminOrderController } = require('../../controllers');
+const authMiddleware = require('../../middleware/auth.middleware');
+const adminMiddleware = require('../../middleware/admin.middleware');
+
+// Admin-only
+router.use(authMiddleware, adminMiddleware);
+
+router.get('/', adminOrderController.getOrders);
+router.get('/:orderId', adminOrderController.getOrderById);
+router.post('/:orderId/verify-payment', adminOrderController.verifyPayment);
+router.post('/:orderId/status', adminOrderController.updateOrderStatus);
+
+module.exports = router;

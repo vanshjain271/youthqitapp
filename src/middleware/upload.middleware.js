@@ -114,7 +114,17 @@ const handleMultipleUpload = (req, res, next) => {
   });
 };
 
+// Export multer instance with .single() method for compatibility
+const upload = multer({
+  storage,
+  fileFilter: imageFileFilter,
+  limits: {
+    fileSize: MAX_FILE_SIZE
+  }
+});
+
 module.exports = {
+  upload,
   handleSingleUpload,
   handleMultipleUpload,
   ALLOWED_IMAGE_TYPES,
