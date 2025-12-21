@@ -22,7 +22,9 @@
     "express-rate-limit": "^7.1.5",
     "express-validator": "^7.0.1",
     "morgan": "^1.10.0",
+
     "axios": "^1.6.2",
+    "pdfkit": "^0.14.0",
     "multer": "^1.4.5-lts.1",
     "@aws-sdk/client-s3": "^3.450.0"
   },

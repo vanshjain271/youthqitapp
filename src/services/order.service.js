@@ -1,11 +1,11 @@
 /**
- * Order Service – MVP (Phase 3)
+ * Order Service – MVP (Phase 3 + Phase 4 Invoice Integration)
  *
  * Rules:
  * - Service-first architecture
  * - Stock deducted ONLY on CONFIRMED
+ * - Invoice generated ONLY on CONFIRMED
  * - Buyer can cancel ONLY in PAYMENT_PENDING
- * - No invoice, refunds, wallet, coupons (future phases)
  */
 
 const Order = require('../models/Order');
@@ -139,6 +139,7 @@ class OrderService {
 
   /**
    * Verify Payment (Admin)
+   * Generates invoice on CONFIRMED
    */
   async verifyPayment(orderId, adminId, approved, note = '') {
     const order = await Order.findById(orderId);
@@ -148,10 +149,14 @@ class OrderService {
       return { success: false, message: 'Verification not allowed' };
     }
 
+    let invoice = null;
+
     if (approved) {
+      // Deduct stock
       const stockResult = await this._deductStock(order.items);
       if (!stockResult.success) return stockResult;
 
+      // Transition to CONFIRMED
       const transition = order.transitionTo(
         'CONFIRMED',
         adminId,
@@ -165,7 +170,24 @@ class OrderService {
 
       order.paymentVerifiedAt = new Date();
       order.paymentVerifiedBy = adminId;
+
+      await order.save();
+
+      // Generate invoice on CONFIRMED
+      try {
+        const InvoiceService = require('./invoice.service');
+        const invoiceResult = await InvoiceService.generateInvoice(order._id);
+        if (invoiceResult.success) {
+          invoice = invoiceResult.invoice;
+          order.invoice = invoice._id;
+          await order.save();
+        }
+      } catch (error) {
+        console.error('Invoice generation error:', error);
+        // Continue without invoice - can be generated later
+      }
     } else {
+      // Reject - transition to CANCELLED
       const transition = order.transitionTo(
         'CANCELLED',
         adminId,
@@ -175,10 +197,16 @@ class OrderService {
       if (!transition.valid) {
         return { success: false, message: transition.message };
       }
+
+      await order.save();
     }
 
-    await order.save();
-    return { success: true, order };
+    return {
+      success: true,
+      order,
+      invoice,
+      message: approved ? 'Payment verified' : 'Payment rejected'
+    };
   }
 
   /**
@@ -240,6 +268,66 @@ class OrderService {
 
     await order.save();
     return { success: true, order };
+  }
+
+  /**
+   * Get Order by ID
+   */
+  async getOrderById(orderId, userId = null, isAdmin = false) {
+    const order = await Order.findById(orderId)
+      .populate('user', 'name phone')
+      .populate('paymentVerifiedBy', 'name')
+      .populate('invoice');
+
+    if (!order) return { success: false, message: 'Order not found' };
+
+    if (!isAdmin && userId && order.user._id.toString() !== userId.toString()) {
+      return { success: false, message: 'Access denied' };
+    }
+
+    return { success: true, order };
+  }
+
+  /**
+   * List Orders
+   */
+  async listOrders(filter = {}, pagination = {}) {
+    const { userId, status, dateFrom, dateTo } = filter;
+    const { page = 1, limit = 20 } = pagination;
+
+    const query = {};
+    if (userId) query.user = userId;
+    if (status) query.status = status;
+
+    if (dateFrom || dateTo) {
+      query.createdAt = {};
+      if (dateFrom) query.createdAt.$gte = new Date(dateFrom);
+      if (dateTo) query.createdAt.$lte = new Date(dateTo);
+    }
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    const [orders, total] = await Promise.all([
+      Order.find(query)
+        .populate('user', 'name phone')
+        .populate('invoice', 'invoiceNumber pdfUrl')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(parseInt(limit))
+        .lean(),
+      Order.countDocuments(query)
+    ]);
+
+    return {
+      success: true,
+      orders,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        pages: Math.ceil(total / parseInt(limit))
+      }
+    };
   }
 
   /**

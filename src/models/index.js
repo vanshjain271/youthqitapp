@@ -1,3 +1,4 @@
+
 /**
  * Models Index - MVP
  */
@@ -7,6 +8,7 @@ const Brand = require('./Brand');
 const Category = require('./Category');
 const Product = require('./Product');
 const Order = require('./Order');
+const Invoice = require('./invoice');
 
 module.exports = {
   User,
@@ -14,4 +16,5 @@ module.exports = {
   Category,
   Product,
   Order,
+  Invoice
 };
